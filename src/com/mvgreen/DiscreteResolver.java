@@ -98,7 +98,7 @@ public class DiscreteResolver implements Resolver {
                             stack.push((char) 1);
                     }
                     else
-                        throw new IncorrectExpressionException();
+                        throw new IncorrectExpressionException("Can't find variable " + c);
                     break;
             }
         }
