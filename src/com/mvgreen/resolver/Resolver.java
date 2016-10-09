@@ -1,4 +1,4 @@
-package com.mvgreen;
+package com.mvgreen.resolver;
 
 import java.util.HashMap;
 
