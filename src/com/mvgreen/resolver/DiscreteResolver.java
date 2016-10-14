@@ -1,213 +1,309 @@
 package com.mvgreen.resolver;
 
-import java.util.HashMap;
-import java.util.Stack;
+import java.util.EmptyStackException;
 
-public class DiscreteResolver implements Resolver {
+public class DiscreteResolver implements Resolver{
 
-    /** Метод реализует стековую машину, подсчитывающую значение выражения для данного набора значений переменных.
-     * Версия требует упрощения и оптимизации.
-     * Для более удобного наследования типы K и V HashMap-а не указаны, в данном случае они являются
-     * Character и Integer соответственно. */
-    @Override
-    public int resolve(String expression, HashMap values) throws IncorrectExpressionException {
-        // Конвертирование в обратную польскую нотацию
-        expression = convertToPostfix(expression);
-        Stack<Character> stack = new Stack<>();
-        // Все используемые операторы унарные или бинарные, a и b - переменные, хранящие операнды
-        int a, b;
-        for (char c : expression.toCharArray()) {
-            switch (c){
-                case '¬':
-                    a = stack.pop();
-                    if (a == 0)
-                        stack.push((char) 1);
-                    else
-                        stack.push((char) 0);
-                    break;
-                case '∧':
-                    b = stack.pop();
-                    a = stack.pop();
-                    stack.push((char)(a * b));
-                    break;
-                case '∨':
-                    b = stack.pop();
-                    a = stack.pop();
-                    if (a == 1 || b == 1)
-                        stack.push((char) 1);
-                    else
-                        stack.push((char) 0);
-                    break;
-                case '+':
-                    b = stack.pop();
-                    a = stack.pop();
-                    if (a == b)
-                        stack.push((char) 0);
-                    else
-                        stack.push((char) 1);
-                    break;
-                case '|':
-                    b = stack.pop();
-                    a = stack.pop();
-                    if (a == 1 && b == 1)
-                        stack.push((char) 0);
-                    else
-                        stack.push((char) 1);
-                    break;
-                case '↓':
-                    b = stack.pop();
-                    a = stack.pop();
-                    if (a == 0 && b == 0)
-                        stack.push((char) 1);
-                    else
-                        stack.push((char) 0);
-                    break;
-                case '→':
-                    b = stack.pop();
-                    a = stack.pop();
-                    if (a == 1 && b == 0)
-                        stack.push((char) 0);
-                    else
-                        stack.push((char) 1);
-                    break;
-                case '↛':
-                    b = stack.pop();
-                    a = stack.pop();
-                    if (a == 1 && b == 0)
-                        stack.push((char) 1);
-                    else
-                        stack.push((char) 0);
-                    break;
-                case '↔':
-                    b = stack.pop();
-                    a = stack.pop();
-                    if (b == a)
-                        stack.push((char) 1);
-                    else
-                        stack.push((char) 0);
-                case '0':
-                    stack.push((char) 0);
-                case '1':
-                    stack.push((char) 1);
-                    break;
-                default:
-                    if (values.containsKey(c)) {
-                        if ((int)values.get(c) == 0)
-                            stack.push((char) 0);
-                        else
-                            stack.push((char) 1);
-                    }
-                    else
-                        throw new IncorrectExpressionException("Can't find variable " + c);
-                    break;
-            }
-        }
-        return stack.pop();
+    /** Данные байты - команды операций для стековой машины */
+
+    private final static byte ZERO = 0;
+
+    private final static byte ONE = 1 << 1;
+
+    private final static byte NEGATION = 2 << 1;
+
+    private final static byte CONJUNCTION = 3 << 1;
+
+    private final static byte DISJUNCTION = 4 << 1;
+    private final static byte ADDITION = 5 << 1;
+
+    // Временно не используется
+    //private final static byte SHEFFER = 6 << 1;
+    //private final static byte PIERCE= 7 << 1;
+
+    private final static byte IMPLICATION = 8 << 1;
+
+    // Временно не используется
+    //private final static byte INTERDICT = 9 << 1;
+
+    private final static byte EQUIVALENCE = 10 << 1;
+
+    // Особый знак, в итоговое выражение не входит
+    private final static byte OPENED_BRACE = 11 << 1;
+
+    private byte[] expression;
+    // Не более 127!
+    private Variable[] variables;
+    private Stack stack;
+
+    /** DONE */
+    public byte resolve(String expr, Variable[] vars) throws EmptyStackException, IncorrectExpressionException {
+        variables = vars;
+        expression = convert(expr);
+        return resolve();
     }
 
-    @Override
-    public String convertToPostfix(String expression) {
-        StringBuilder s = new StringBuilder();
-        Stack<Character> stack = new Stack<>();
-        stack.push('(');
-        expression += ')';
-        boolean b;
-        char a;
-        for (char c : expression.toCharArray()) {
-            switch (c){
-                // I
-                case '¬':
-                    b = true;
-                    do {
-                        if (stack.peek() == '¬')
-                            s.append('¬');
-                        else
-                            b = false;
-                    } while (b);
-                    stack.push(c);
+    /** DONE */
+    public byte resolve() throws EmptyStackException, IncorrectExpressionException {
+        if (!uniqueVars())
+            throw new IncorrectExpressionException("В декларации переменных присутствуют одинаковые имена!");
+        calculate();
+        if (stack.top != 1)
+            throw new IncorrectExpressionException("Некорректное выражение!");
+        else
+            return stack.pop();
+    }
+
+    /** DONE */
+    private boolean uniqueVars() {
+        for (int i = 0; i < variables.length - 1; i++)
+            for (int j = i + 1; j < variables.length; j++)
+                if (variables[i].name.equals(variables[j].name))
+                    return false;
+        return true;
+    }
+
+    /** Вычисляет значение, записанное в expression при помощи значений в variables */
+    private void calculate() throws EmptyStackException{
+        initStack();
+        byte x, y;
+        for (byte b : expression) {
+            switch (b){
+                case ZERO:
+                case ONE:
+                    stack.push(b);
                     break;
-                // II
-                case '∧':
-                    b = true;
-                    do {
-                        a = stack.peek();
-                        if (a == '¬' || a == '∧')
-                            s.append(stack.pop());
-                        else
-                            b = false;
-                    } while (b);
-                    stack.push(c);
+                case NEGATION:
+                    stack.push(not(stack.pop()));
                     break;
-                // III
-                case '∨':
-                case '+':
-                    b = true;
-                    do {
-                        a = stack.peek();
-                        if (a == '¬' || a == '∧' || a == '∨' || a == '+')
-                            s.append(stack.pop());
-                        else
-                            b = false;
-                    } while (b);
-                    stack.push(c);
+                case CONJUNCTION:
+                    y = stack.pop();
+                    x = stack.pop();
+                    stack.push((byte) (x & y));
                     break;
-                // IV
-                case '|':
-                case '↓':
-                    b = true;
-                    do {
-                        a = stack.peek();
-                        if (a == '¬' || a == '∧' || a == '∨' || a == '+' || a == '|' || a == '↓')
-                            s.append(stack.pop());
-                        else
-                            b = false;
-                    } while (b);
-                    stack.push(c);
+                case DISJUNCTION:
+                    y = stack.pop();
+                    x = stack.pop();
+                    stack.push((byte) (y | x));
                     break;
-                // V
-                case '→':
-                case '↛':
-                    b = true;
-                    do {
-                        a = stack.peek();
-                        if (a == '¬' || a == '∧' || a == '∨' || a == '+' || a == '|' || a == '↓' || a ==  '→' || a == '↛')
-                            s.append(stack.pop());
-                        else
-                            b = false;
-                    } while (b);
-                    stack.push(c);
+                case ADDITION:
+                    y = stack.pop();
+                    x = stack.pop();
+                    stack.push((byte) ((x & not(y)) | (not(x) & y)));
                     break;
-                // VI
-                case '↔':
-                    b = true;
-                    do {
-                        a = stack.peek();
-                        if (a == '¬' || a == '∧' || a == '∨' || a == '+' || a == '|' || a == '↓' || a ==  '→' ||
-                                a == '↛' || a == '↔')
-                            s.append(stack.pop());
-                        else
-                            b = false;
-                    } while (b);
-                    stack.push(c);
+                case IMPLICATION:
+                    y = stack.pop();
+                    x = stack.pop();
+                    stack.push((byte) (not(x) | y));
                     break;
-                // Не выталкиваемые ничем иным
-                case '(':
-                    stack.push(c);
+                case EQUIVALENCE:
+                    y = stack.pop();
+                    x = stack.pop();
+                    stack.push((byte) ((x & y) | (not(x) & not(y))));
                     break;
-                case ')':
-                    do {
-                        a = stack.pop();
-                        if (a != '(')
-                            s.append(a);
-                    } while (a != '(');
-                    break;
-                // Достижима только для символов переменных и цифр
                 default:
-                    if (c != ' ')
-                        s.append(c);
+                    stack.push(variables[b >>> 1].value);
                     break;
             }
         }
-        return s.toString();
+    }
+
+    /** В результате простой инверсии получается отрицательное число,
+     *  чтобы получить отрицание, нужно прибавить к инверсии 2. */
+    private byte not(byte x) {
+        return (byte) (~x + 2);
+    }
+
+    /** DONE */
+    private void initStack() {
+        if (stack == null)
+            stack = new Stack();
+        else
+            stack.clear();
+    }
+
+    private StringBuilder charBuffer = new StringBuilder();
+    private Stack operationBuffer = new Stack();
+    private Stack temp = new Stack();
+
+
+    /** DONE */
+    /**
+     * Переводит строку с выражением в массив, каждый элемент которого - команда стековой машине.
+     * Если младший бит равен 1, то семь старших битов - индекс переменной,
+     * если 0, то семь старших бит - номер операции (см. константы вверху).
+     * Пропущенные конъюнкции вставляются между переменными.
+     **/
+    public byte[] convert(String expr) throws IncorrectExpressionException {
+        boolean lastWasNumber = false;
+        temp.clear();
+        expr = '(' + expr + ')';
+        for (char c : expr.toCharArray()) {
+            switch (c){
+                case '0':
+                    temp.push(ZERO);
+                    lastWasNumber = true;
+                    break;
+                case '1':
+                    temp.push(ONE);
+                    lastWasNumber = true;
+                    break;
+                case '¬':
+                    pushLowerPriority(NEGATION);
+                    operationBuffer.push(NEGATION);
+                    lastWasNumber = false;
+                    break;
+                case '∧':
+                    pushLowerPriority(CONJUNCTION);
+                    operationBuffer.push(CONJUNCTION);
+                    lastWasNumber = false;
+                    break;
+                case '∨':
+                    pushLowerPriority(DISJUNCTION);
+                    operationBuffer.push(DISJUNCTION);
+                    lastWasNumber = false;
+                    break;
+                case '+':
+                    pushLowerPriority(DISJUNCTION); // Одинаковый приоритет
+                    operationBuffer.push(ADDITION);
+                    lastWasNumber = false;
+                    break;
+                // Временно не поддерживается
+                //case '|':
+                //    pushLowerPriority(SHEFFER);
+                //    operationBuffer.push(SHEFFER);
+                //    lastWasNumber = false;
+                //    break;
+                //case '↓':
+                //    pushLowerPriority(SHEFFER); // Одинаковый приоритет
+                //    operationBuffer.push(PIERCE);
+                //    lastWasNumber = false;
+                //    break;
+                case '→':
+                    pushLowerPriority(IMPLICATION);
+                    operationBuffer.push(IMPLICATION);
+                    lastWasNumber = false;
+                    break;
+                // Временно не используется
+                //case '↛':
+                //    pushLowerPriority(IMPLICATION); // Одинаковый приоритет
+                //    operationBuffer.push(INTERDICT);
+                //    lastWasNumber = false;
+                //    break;
+                case '↔':
+                    pushLowerPriority(EQUIVALENCE);
+                    operationBuffer.push(EQUIVALENCE);
+                    lastWasNumber = false;
+                    break;
+                case '(':
+                    if (lastWasNumber){
+                        pushLowerPriority(CONJUNCTION);
+                        operationBuffer.push(CONJUNCTION);
+                    }
+                    operationBuffer.push(OPENED_BRACE); // Не может выталкивать другие знаки
+                    lastWasNumber = false;
+                    break;
+                case ')':
+                    pushLowerPriority(OPENED_BRACE);
+                    lastWasNumber = false;
+                    break;
+                default:
+                    if (c != ' ')
+                        charBuffer.append(c);
+                    boolean found = false;
+                    for (int i = 0; i < variables.length; i++) {
+                        if (variables[i].name.contentEquals(charBuffer)){
+                            found = true;
+                            if (lastWasNumber){
+                                pushLowerPriority(CONJUNCTION);
+                                operationBuffer.push(CONJUNCTION);
+                                lastWasNumber = false;
+                            }
+                            temp.push((byte) ((i << 1) + 1));
+                            charBuffer.delete(0, charBuffer.length());
+                            break;
+                        }
+                    }
+                    if (!found)
+                        throw new IncorrectExpressionException("Переменной " + charBuffer.toString() + " не существует!");
+                    lastWasNumber = true;
+                    break;
+            }
+        }
+        return temp.toByteArray();
+    }
+
+    /** DONE */
+    /** Выталкивает из буфера в итоговый массив все операторы с приоритетом меньшим или равным данному,
+     * вытолкнутые скобки не попадают в результат
+     **/
+    private void pushLowerPriority(byte operator) {
+        while (operationBuffer.top > 0) {
+            byte b = operationBuffer.peek();
+            if (b == OPENED_BRACE && operator == OPENED_BRACE){
+                operationBuffer.pop();
+                return;
+            }
+            if (b <= operator)
+                temp.push(operationBuffer.pop());
+            else return;
+        }
+
+    }
+
+    //private boolean isOperator(char c) {
+    //   return c == '¬' || c == '∧' || c == '∨' || c == '+' || c == '|'
+    //            || c == '↓' || c == '→' || c == '↛' || c == '↔' || c == '(' || c == ')';
+    //}
+
+}
+
+// Дженерики в Java не поддерживают примитивные типы данных, поэтому библиотечный класс не подходит.
+class Stack {
+
+    private byte[] stack;
+    // Указывает на первый свободный индекс
+    int top;
+
+    Stack(){
+        stack = new byte[10];
+        top = 0;
+    }
+
+    void push(byte b){
+        if (top == stack.length)
+            extendStack();
+        stack[top] = b;
+        top++;
+    }
+
+    byte pop(){
+        if (top == 0)
+            throw new EmptyStackException();
+        top--;
+        return stack[top];
+    }
+
+    byte peek(){
+        if (top == 0)
+            throw new EmptyStackException();
+        return stack[top - 1];
+    }
+
+    private void extendStack() {
+        byte[] t = new byte[stack.length * 2];
+        System.arraycopy(stack, 0, t, 0, stack.length);
+        stack = t;
+    }
+
+    void clear() {
+        top = 0;
+    }
+
+    /** Обрубает пустые индексы, нужен для convert() */
+    byte[] toByteArray(){
+        byte[] result = new byte[top];
+        System.arraycopy(stack, 0, result, 0, top);
+        return result;
     }
 }
