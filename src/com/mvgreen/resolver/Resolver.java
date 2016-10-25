@@ -8,4 +8,7 @@ public interface Resolver {
     /** Возвращает математическое выражение, конвертированное в обратную постфиксную запись*/
     byte[] convert(String expression) throws IncorrectExpressionException;
 
+    /** Возвращает вектор значений функции */
+    byte[] resolveVector(String expression, char[] variables) throws IncorrectExpressionException;
+
 }

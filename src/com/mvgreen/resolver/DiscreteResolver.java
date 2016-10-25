@@ -32,19 +32,19 @@ public class DiscreteResolver implements Resolver{
     private final static byte OPENED_BRACE = 11 << 1;
 
     private byte[] expression;
-    // Не более 127!
+    // Не более 31! т.к. вектор значений длиной 2^(кол-во переменных)
     private Variable[] variables;
     private Stack stack;
 
     /** DONE */
-    public byte resolve(String expr, Variable[] vars) throws EmptyStackException, IncorrectExpressionException {
+    public byte resolve(String expr, Variable[] vars) throws IncorrectExpressionException {
         variables = vars;
         expression = convert(expr);
         return resolve();
     }
 
     /** DONE */
-    public byte resolve() throws EmptyStackException, IncorrectExpressionException {
+    public byte resolve() throws IncorrectExpressionException {
         if (!uniqueVars())
             throw new IncorrectExpressionException("В декларации переменных присутствуют одинаковые имена!");
         calculate();
@@ -58,13 +58,13 @@ public class DiscreteResolver implements Resolver{
     private boolean uniqueVars() {
         for (int i = 0; i < variables.length - 1; i++)
             for (int j = i + 1; j < variables.length; j++)
-                if (variables[i].name.equals(variables[j].name))
+                if (variables[i].name == variables[j].name)
                     return false;
         return true;
     }
 
     /** Вычисляет значение, записанное в expression при помощи значений в variables */
-    private void calculate() throws EmptyStackException{
+    private void calculate(){
         initStack();
         byte x, y;
         for (byte b : expression) {
@@ -122,7 +122,6 @@ public class DiscreteResolver implements Resolver{
             stack.clear();
     }
 
-    private StringBuilder charBuffer = new StringBuilder();
     private Stack operationBuffer = new Stack();
     private Stack temp = new Stack();
 
@@ -141,14 +140,26 @@ public class DiscreteResolver implements Resolver{
         for (char c : expr.toCharArray()) {
             switch (c){
                 case '0':
+                    if (lastWasNumber){
+                        pushLowerPriority(CONJUNCTION);
+                        operationBuffer.push(CONJUNCTION);
+                    }
                     temp.push(ZERO);
                     lastWasNumber = true;
                     break;
                 case '1':
+                    if (lastWasNumber){
+                        pushLowerPriority(CONJUNCTION);
+                        operationBuffer.push(CONJUNCTION);
+                    }
                     temp.push(ONE);
                     lastWasNumber = true;
                     break;
                 case '¬':
+                    if (lastWasNumber){
+                        pushLowerPriority(CONJUNCTION);
+                        operationBuffer.push(CONJUNCTION);
+                    }
                     pushLowerPriority(NEGATION);
                     operationBuffer.push(NEGATION);
                     lastWasNumber = false;
@@ -168,28 +179,11 @@ public class DiscreteResolver implements Resolver{
                     operationBuffer.push(ADDITION);
                     lastWasNumber = false;
                     break;
-                // Временно не поддерживается
-                //case '|':
-                //    pushLowerPriority(SHEFFER);
-                //    operationBuffer.push(SHEFFER);
-                //    lastWasNumber = false;
-                //    break;
-                //case '↓':
-                //    pushLowerPriority(SHEFFER); // Одинаковый приоритет
-                //    operationBuffer.push(PIERCE);
-                //    lastWasNumber = false;
-                //    break;
                 case '→':
                     pushLowerPriority(IMPLICATION);
                     operationBuffer.push(IMPLICATION);
                     lastWasNumber = false;
                     break;
-                // Временно не используется
-                //case '↛':
-                //    pushLowerPriority(IMPLICATION); // Одинаковый приоритет
-                //    operationBuffer.push(INTERDICT);
-                //    lastWasNumber = false;
-                //    break;
                 case '↔':
                     pushLowerPriority(EQUIVALENCE);
                     operationBuffer.push(EQUIVALENCE);
@@ -208,11 +202,11 @@ public class DiscreteResolver implements Resolver{
                     lastWasNumber = false;
                     break;
                 default:
-                    if (c != ' ')
-                        charBuffer.append(c);
+                    if (c == ' ')
+                        break;
                     boolean found = false;
                     for (int i = 0; i < variables.length; i++) {
-                        if (variables[i].name.contentEquals(charBuffer)){
+                        if (variables[i].name == c){
                             found = true;
                             if (lastWasNumber){
                                 pushLowerPriority(CONJUNCTION);
@@ -220,17 +214,39 @@ public class DiscreteResolver implements Resolver{
                                 lastWasNumber = false;
                             }
                             temp.push((byte) ((i << 1) + 1));
-                            charBuffer.delete(0, charBuffer.length());
                             break;
                         }
                     }
                     if (!found)
-                        throw new IncorrectExpressionException("Переменной " + charBuffer.toString() + " не существует!");
+                        throw new IncorrectExpressionException("Переменной \"" + c + "\" не существует!");
                     lastWasNumber = true;
                     break;
             }
         }
         return temp.toByteArray();
+    }
+
+    /** DONE */
+    @Override
+    public byte[] resolveVector(String expression, char[] vs) throws IncorrectExpressionException{
+        byte[] vector = new byte[power2(vs.length)];
+        variables = new Variable[vs.length];
+        for (int i = 0; i < vs.length; i++)
+            variables[i] = new Variable(vs[i], (byte) 0);
+        vector[0] = resolve(expression, variables);
+        for (int i = 1; i < vector.length; i++) {
+            for (int j = 0; j < variables.length; j++)
+                variables[j].value = (byte) ((i >> (2 - j)) & 1);
+            vector[i] = resolve();
+        }
+        return vector;
+    }
+
+    private int power2(int b) {
+        int a = 1;
+        for (int i = 0; i < b; i++)
+            a *= 2;
+        return a;
     }
 
     /** DONE */
@@ -250,11 +266,6 @@ public class DiscreteResolver implements Resolver{
         }
 
     }
-
-    //private boolean isOperator(char c) {
-    //   return c == '¬' || c == '∧' || c == '∨' || c == '+' || c == '|'
-    //            || c == '↓' || c == '→' || c == '↛' || c == '↔' || c == '(' || c == ')';
-    //}
 
 }
 
