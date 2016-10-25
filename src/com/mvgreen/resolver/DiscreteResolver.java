@@ -29,7 +29,7 @@ public class DiscreteResolver implements Resolver{
     private final static byte EQUIVALENCE = 10 << 1;
 
     // Особый знак, в итоговое выражение не входит
-    private final static byte OPENED_BRACE = 11 << 1;
+    private final static byte BRACE = 11 << 1;
 
     private byte[] expression;
     // Не более 31! т.к. вектор значений длиной 2^(кол-во переменных)
@@ -194,12 +194,12 @@ public class DiscreteResolver implements Resolver{
                         pushLowerPriority(CONJUNCTION);
                         operationBuffer.push(CONJUNCTION);
                     }
-                    operationBuffer.push(OPENED_BRACE); // Не может выталкивать другие знаки
+                    operationBuffer.push(BRACE); // Не может выталкивать другие знаки
                     lastWasNumber = false;
                     break;
                 case ')':
-                    pushLowerPriority(OPENED_BRACE);
-                    lastWasNumber = false;
+                    pushLowerPriority(BRACE);
+                    lastWasNumber = true;
                     break;
                 default:
                     if (c == ' ')
@@ -256,7 +256,7 @@ public class DiscreteResolver implements Resolver{
     private void pushLowerPriority(byte operator) {
         while (operationBuffer.top > 0) {
             byte b = operationBuffer.peek();
-            if (b == OPENED_BRACE && operator == OPENED_BRACE){
+            if (b == BRACE && operator == BRACE){
                 operationBuffer.pop();
                 return;
             }

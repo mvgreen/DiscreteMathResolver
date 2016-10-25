@@ -24,7 +24,7 @@ import com.mvgreen.resolver.*;
 public class Main {
 
     public static void main(String[] args) throws IncorrectExpressionException {
-        String expression = "¬xy + ¬yz";
+        String expression = "(x ∨ y) ¬z → y";
         char[] vars = {'x', 'y', 'z'};
 
         Resolver t = new DiscreteResolver();
