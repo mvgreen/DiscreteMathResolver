@@ -71,7 +71,7 @@ public class DiscreteResolver implements Resolver{
             switch (b){
                 case ZERO:
                 case ONE:
-                    stack.push(b);
+                    stack.push((byte) (b >> 1));
                     break;
                 case NEGATION:
                     stack.push(not(stack.pop()));
