@@ -4,6 +4,12 @@ import java.util.EmptyStackException;
 
 public class DiscreteResolver implements Resolver{
 
+    static Resolver instance;
+
+    public DiscreteResolver(){
+        instance = this;
+    }
+
     /** Данные байты - команды операций для стековой машины */
 
     private final static byte ZERO = 0;
@@ -242,6 +248,23 @@ public class DiscreteResolver implements Resolver{
         return vector;
     }
 
+    @Override
+    public byte[] resolveVector(String expression, Variable[] variables) throws IncorrectExpressionException {
+        byte[] vector = new byte[power2(variables.length)];
+        this.variables = variables;
+        for (int i = 0; i < vector.length; i++) {
+            for (int j = 0; j < variables.length; j++)
+                variables[j].value = (byte) ((i >> (variables.length - 1 - j)) & 1);
+            vector[i] = resolve();
+        }
+        return vector;
+    }
+
+    @Override
+    public byte[] resolveVector(Function function) throws IncorrectExpressionException {
+        return resolveVector(function.getExpression(), function.getVars());
+    }
+
     private int power2(int b) {
         int a = 1;
         for (int i = 0; i < b; i++)
@@ -265,6 +288,10 @@ public class DiscreteResolver implements Resolver{
             else return;
         }
 
+    }
+
+    public static Resolver getInstance(){
+        return instance;
     }
 
 }

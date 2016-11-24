@@ -11,4 +11,8 @@ public interface Resolver {
     /** Возвращает вектор значений функции */
     byte[] resolveVector(String expression, char[] variables) throws IncorrectExpressionException;
 
+    byte[] resolveVector(String expression, Variable[] variables) throws IncorrectExpressionException;
+
+    byte[] resolveVector(Function function) throws IncorrectExpressionException;
+
 }
