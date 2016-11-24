@@ -24,8 +24,8 @@ import com.mvgreen.resolver.*;
 public class Main {
 
     public static void main(String[] args) throws IncorrectExpressionException {
-        String expression = "xy + x + y + 1 + xz +zy";
-        char[] vars = {'x', 'y', 'z'};
+        String expression = "e";
+        char[] vars = {'a', 'b', 'c', 'd', 'e'};
 
         Resolver t = new DiscreteResolver();
         byte[] b = t.resolveVector(expression, vars);
@@ -36,7 +36,7 @@ public class Main {
         System.out.println("f");
         for (int i = 0; i < b.length; i++) {
             for (int j = 0; j < vars.length; j++) {
-                System.out.print((i >> (2-j)) & 1);
+                System.out.print((i >> (vars.length - 1- j)) & 1);
                 System.out.print(" ");
             }
             System.out.println(b[i]);

@@ -236,7 +236,7 @@ public class DiscreteResolver implements Resolver{
         vector[0] = resolve(expression, variables);
         for (int i = 1; i < vector.length; i++) {
             for (int j = 0; j < variables.length; j++)
-                variables[j].value = (byte) ((i >> (2 - j)) & 1);
+                variables[j].value = (byte) ((i >> (variables.length - 1 - j)) & 1);
             vector[i] = resolve();
         }
         return vector;
